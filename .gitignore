@@ -52,8 +52,9 @@ android/key.properties
 # Local profiler and crash output
 *.trace
 *.timeline.json
-core
-core.*
+# Native crash dumps created at the repository root. Keep lib/core/ tracked.
+/core
+/core.*
 android/.gradle/
 android/local.properties
 ios/Pods/
