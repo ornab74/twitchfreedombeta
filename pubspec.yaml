@@ -53,6 +53,10 @@ dependency_overrides:
     path: third_party/media_kit_video
 
 flutter:
+  # flutter_gemma 1.4.1 emits a SwiftPM manifest that Xcode 15.4 cannot parse,
+  # and the media_kit Apple plugins still require CocoaPods.
+  config:
+    enable-swift-package-manager: false
   uses-material-design: true
   assets:
     - assets/prompts/
