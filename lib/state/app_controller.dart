@@ -589,59 +589,76 @@ final class AppController extends ChangeNotifier {
     return const AppSuccess<void>(null);
   }
 
-  Future<void> searchDiscovery(String query) async {
+  Future<AppResult<List<DiscoveryStream>>> searchDiscovery(String query) async {
     _setBusy(true, 'Searching Twitch text metadata…');
-    final results = query.trim().isEmpty
-        ? await helix.followedStreams()
-        : await helix.searchChannels(query.trim());
-    var candidates = results.fold(
-      success: (List<DiscoveryStream> value) => _filterDiscovery(value),
-      failure: (AppFailure failure) {
-        _setError(failure.message);
-        return <DiscoveryStream>[];
-      },
-    );
-
-    if (_preferences.ai.enabled && gemma.isReady && candidates.length > 1) {
-      final reranked = await agents.rerankDiscovery(
-        preference: _preferences.discovery,
-        candidates: candidates
-            .map(
-              (DiscoveryStream item) => <String, Object?>{
-                'id': item.id,
-                'channel': item.channel,
-                'title': item.title,
-                'category': item.category,
-                'language': item.language,
-                'viewer_count': item.viewerCount,
-              },
-            )
-            .toList(growable: false),
-      );
-      if (reranked is AppSuccess<Map<String, String>> &&
-          reranked.value.isNotEmpty) {
-        final ranks = reranked.value;
-        candidates =
-            candidates
-                .map((DiscoveryStream item) {
-                  final encoded = ranks[item.id];
-                  if (encoded == null) return item;
-                  final separator = encoded.indexOf('|');
-                  final reason = separator < 0
-                      ? ''
-                      : encoded.substring(separator + 1);
-                  return item.copyWith(reason: reason);
-                })
-                .toList(growable: false)
-              ..sort((DiscoveryStream a, DiscoveryStream b) {
-                final left = ranks[a.id]?.split('|').first ?? '999';
-                final right = ranks[b.id]?.split('|').first ?? '999';
-                return left.compareTo(right);
-              });
+    try {
+      final results = query.trim().isEmpty
+          ? await helix.followedStreams()
+          : await helix.searchChannels(query.trim());
+      if (results case AppError<List<DiscoveryStream>>(:final error)) {
+        _discovery = <DiscoveryStream>[];
+        _setError(error.message);
+        return AppError<List<DiscoveryStream>>(error);
       }
+      var candidates = _filterDiscovery(
+        (results as AppSuccess<List<DiscoveryStream>>).value,
+      );
+
+      if (_preferences.ai.enabled && gemma.isReady && candidates.length > 1) {
+        final reranked = await agents.rerankDiscovery(
+          preference: _preferences.discovery,
+          candidates: candidates
+              .map(
+                (DiscoveryStream item) => <String, Object?>{
+                  'id': item.id,
+                  'channel': item.channel,
+                  'title': item.title,
+                  'category': item.category,
+                  'language': item.language,
+                  'viewer_count': item.viewerCount,
+                },
+              )
+              .toList(growable: false),
+        );
+        if (reranked is AppSuccess<Map<String, String>> &&
+            reranked.value.isNotEmpty) {
+          final ranks = reranked.value;
+          candidates =
+              candidates
+                  .map((DiscoveryStream item) {
+                    final encoded = ranks[item.id];
+                    if (encoded == null) return item;
+                    final separator = encoded.indexOf('|');
+                    final reason = separator < 0
+                        ? ''
+                        : encoded.substring(separator + 1);
+                    return item.copyWith(reason: reason);
+                  })
+                  .toList(growable: false)
+                ..sort((DiscoveryStream a, DiscoveryStream b) {
+                  final left = ranks[a.id]?.split('|').first ?? '999';
+                  final right = ranks[b.id]?.split('|').first ?? '999';
+                  return left.compareTo(right);
+                });
+        }
+      }
+      _discovery = candidates;
+      notifyListeners();
+      return AppSuccess<List<DiscoveryStream>>(candidates);
+    } catch (cause) {
+      const message = 'Could not load Twitch discovery right now.';
+      final failure = AppFailure(
+        'discovery_failed',
+        message,
+        cause: cause,
+        retryable: true,
+      );
+      _discovery = <DiscoveryStream>[];
+      _setError(message);
+      return AppError<List<DiscoveryStream>>(failure);
+    } finally {
+      _setBusy(false);
     }
-    _discovery = candidates;
-    _setBusy(false);
   }
 
   List<DiscoveryStream> _filterDiscovery(List<DiscoveryStream> input) {

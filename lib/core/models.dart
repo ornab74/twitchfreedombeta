@@ -25,6 +25,19 @@ enum ThemeProfile {
   arcticSignal,
   oledVoid,
   highContrast,
+  matrix,
+  barbie,
+  halo2,
+  synthwaveSunset,
+  oceanAbyss,
+  forestTerminal,
+  crimsonProtocol,
+  desertDusk,
+  lunarIce,
+  retroArcade,
+  royalAmethyst,
+  copperSteampunk,
+  sakuraNight,
 }
 
 enum MoodLabel {

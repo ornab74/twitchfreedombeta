@@ -98,19 +98,30 @@ final class TwitchHelixService {
   final http.Client _client;
 
   Future<AppResult<List<DiscoveryStream>>> followedStreams() async {
-    final state = await _auth.tokenState();
-    if (state == null || state.userId.isEmpty) {
-      return const AppError<List<DiscoveryStream>>(
+    try {
+      final state = await _auth.tokenState();
+      if (state == null || state.userId.isEmpty) {
+        return const AppError<List<DiscoveryStream>>(
+          AppFailure(
+            'not_authorized',
+            'Authorize Twitch to load followed channels.',
+          ),
+        );
+      }
+      return _getStreams(<String, String>{
+        'user_id': state.userId,
+        'first': '100',
+      }, path: '/streams/followed');
+    } catch (error) {
+      return AppError<List<DiscoveryStream>>(
         AppFailure(
-          'not_authorized',
-          'Authorize Twitch to load followed channels.',
+          'followed_streams_failed',
+          'Could not load followed Twitch channels.',
+          cause: error,
+          retryable: true,
         ),
       );
     }
-    return _getStreams(<String, String>{
-      'user_id': state.userId,
-      'first': '100',
-    }, path: '/streams/followed');
   }
 
   Future<AppResult<List<DiscoveryStream>>> searchByCategory(

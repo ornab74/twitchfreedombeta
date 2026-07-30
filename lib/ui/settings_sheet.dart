@@ -1231,6 +1231,19 @@ String _themeName(ThemeProfile value) => switch (value) {
   ThemeProfile.arcticSignal => 'Arctic Signal',
   ThemeProfile.oledVoid => 'OLED Void',
   ThemeProfile.highContrast => 'High Contrast',
+  ThemeProfile.matrix => 'Matrix',
+  ThemeProfile.barbie => 'Barbie',
+  ThemeProfile.halo2 => 'Halo 2',
+  ThemeProfile.synthwaveSunset => 'Synthwave Sunset',
+  ThemeProfile.oceanAbyss => 'Ocean Abyss',
+  ThemeProfile.forestTerminal => 'Forest Terminal',
+  ThemeProfile.crimsonProtocol => 'Crimson Protocol',
+  ThemeProfile.desertDusk => 'Desert Dusk',
+  ThemeProfile.lunarIce => 'Lunar Ice',
+  ThemeProfile.retroArcade => 'Retro Arcade',
+  ThemeProfile.royalAmethyst => 'Royal Amethyst',
+  ThemeProfile.copperSteampunk => 'Copper Steampunk',
+  ThemeProfile.sakuraNight => 'Sakura Night',
 };
 
 String _protectiveName(ProtectiveMode value) => switch (value) {

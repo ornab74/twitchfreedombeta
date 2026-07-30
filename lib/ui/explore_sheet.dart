@@ -28,6 +28,7 @@ final class ExploreSheet extends StatefulWidget {
 final class _ExploreSheetState extends State<ExploreSheet> {
   final TextEditingController _search = TextEditingController();
   String _activeQuery = '';
+  String _requestError = '';
 
   @override
   void initState() {
@@ -158,7 +159,11 @@ final class _ExploreSheetState extends State<ExploreSheet> {
                   child: controller.busy && controller.discovery.isEmpty
                       ? const Center(child: CircularProgressIndicator())
                       : controller.discovery.isEmpty
-                      ? _EmptyExplore(query: _activeQuery)
+                      ? _EmptyExplore(
+                          query: _activeQuery,
+                          error: _requestError,
+                          onRetry: () => _run(_activeQuery),
+                        )
                       : Scrollbar(
                           child: ListView.separated(
                             primary: true,
@@ -184,8 +189,19 @@ final class _ExploreSheetState extends State<ExploreSheet> {
   }
 
   Future<void> _run(String value) async {
-    setState(() => _activeQuery = value.trim());
-    await widget.controller.searchDiscovery(value);
+    if (!mounted) return;
+    setState(() {
+      _activeQuery = value.trim();
+      _requestError = '';
+    });
+    final result = await widget.controller.searchDiscovery(value);
+    if (!mounted) return;
+    setState(() {
+      _requestError = switch (result) {
+        AppError<List<DiscoveryStream>>(:final error) => error.message,
+        _ => '',
+      };
+    });
   }
 
   Future<void> _add(DiscoveryStream item) async {
@@ -213,8 +229,14 @@ final class _PrivacyBadge extends StatelessWidget {
 }
 
 final class _EmptyExplore extends StatelessWidget {
-  const _EmptyExplore({required this.query});
+  const _EmptyExplore({
+    required this.query,
+    required this.error,
+    required this.onRetry,
+  });
   final String query;
+  final String error;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -230,13 +252,23 @@ final class _EmptyExplore extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            query.isEmpty
+            error.isNotEmpty
+                ? error
+                : query.isEmpty
                 ? 'Authorize Twitch to load followed streams'
                 : 'No matching live text records',
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 7),
+          if (error.isNotEmpty) ...<Widget>[
+            FilledButton.tonalIcon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try again'),
+            ),
+            const SizedBox(height: 10),
+          ],
           Text(
             'Twitch Freedom intentionally does not download preview images, avatars, emotes, or web fonts.',
             style: Theme.of(context).textTheme.bodySmall,

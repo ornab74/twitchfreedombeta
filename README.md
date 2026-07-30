@@ -19,6 +19,10 @@ the app. You choose what to enable.
 
 AI and transcript storage are off until you enable them.
 
+## App screenshots
+
+![Twitch Freedom audio-only playback, live chat, and local AI companion](images/demo.png)
+
 ## Linux and Chromebook setup
 
 Install Flutter first, then install the Linux build packages:

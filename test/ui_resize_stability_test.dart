@@ -99,4 +99,30 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await controller.scheduler.close();
   });
+
+  testWidgets('desktop Explore button opens the discovery sheet', (
+    WidgetTester tester,
+  ) async {
+    final controller = AppController();
+    addTearDown(controller.scheduler.close);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1500, 930);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FreedomTheme.fromProfile(controller.preferences.theme),
+        home: HomeScreen(controller: controller),
+      ),
+    );
+    await tester.tap(find.byTooltip('Explore streams'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Explore live text metadata'), findsOneWidget);
+    expect(find.text('Search live channels or topics'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await controller.scheduler.close();
+  });
 }
