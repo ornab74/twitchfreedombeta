@@ -39,6 +39,27 @@ void _patchAndroid() {
 }
 
 void _patchApple() {
+  const deploymentTargets = <String, (String, String)>{
+    'ios/Runner.xcodeproj/project.pbxproj': (
+      'IPHONEOS_DEPLOYMENT_TARGET',
+      '16.0',
+    ),
+    'macos/Runner.xcodeproj/project.pbxproj': (
+      'MACOSX_DEPLOYMENT_TARGET',
+      '12.0',
+    ),
+  };
+  for (final entry in deploymentTargets.entries) {
+    final file = File(entry.key);
+    if (!file.existsSync()) continue;
+    final (setting, version) = entry.value;
+    final text = file.readAsStringSync().replaceAll(
+      RegExp('$setting = [^;]+;'),
+      '$setting = $version;',
+    );
+    file.writeAsStringSync(text);
+  }
+
   for (final path in <String>['ios/Podfile', 'macos/Podfile']) {
     final file = File(path);
     if (!file.existsSync()) continue;

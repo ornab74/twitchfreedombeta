@@ -332,14 +332,12 @@ final class _PlayerPanelState extends State<PlayerPanel> {
                               controller: controller,
                             ),
                           ),
-                          Positioned(
-                            left: 14,
-                            right: 14,
-                            bottom: 12,
+                          Positioned.fill(
                             child: _OverlayControls(
                               controller: controller,
                               onToggleFullscreen: _toggleFullscreen,
                               fullscreen: false,
+                              insets: const EdgeInsets.fromLTRB(14, 0, 14, 12),
                             ),
                           ),
                         ],
@@ -528,10 +526,12 @@ final class _OverlayControls extends StatefulWidget {
     required this.controller,
     required this.onToggleFullscreen,
     required this.fullscreen,
+    required this.insets,
   });
   final AppController controller;
   final VoidCallback onToggleFullscreen;
   final bool fullscreen;
+  final EdgeInsets insets;
 
   @override
   State<_OverlayControls> createState() => _OverlayControlsState();
@@ -539,12 +539,17 @@ final class _OverlayControls extends StatefulWidget {
 
 final class _OverlayControlsState extends State<_OverlayControls> {
   late ({bool playing, double volume}) _view;
+  Timer? _hideTimer;
+  bool _visible = true;
+  double _unmutedVolume = 1;
 
   @override
   void initState() {
     super.initState();
     _view = _readView();
+    if (_view.volume > 0) _unmutedVolume = _view.volume;
     widget.controller.playback.addListener(_handlePlayback);
+    _scheduleHide();
   }
 
   ({bool playing, double volume}) _readView() => (
@@ -555,72 +560,153 @@ final class _OverlayControlsState extends State<_OverlayControls> {
   void _handlePlayback() {
     final next = _readView();
     if (!mounted || next == _view) return;
+    if (next.volume > 0) _unmutedVolume = next.volume;
     setState(() => _view = next);
+    _scheduleHide();
+  }
+
+  void _reveal() {
+    if (!_visible && mounted) setState(() => _visible = true);
+    _scheduleHide();
+  }
+
+  void _scheduleHide() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _visible) setState(() => _visible = false);
+    });
+  }
+
+  void _toggleMute() {
+    final playback = widget.controller.playback;
+    if (playback.volume > 0) {
+      _unmutedVolume = playback.volume;
+      unawaited(playback.setVolume(0));
+    } else {
+      unawaited(playback.setVolume(_unmutedVolume.clamp(.1, 2)));
+    }
+    _reveal();
   }
 
   @override
   Widget build(BuildContext context) {
     final playback = widget.controller.playback;
-    return Material(
-      type: MaterialType.transparency,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.68),
-          borderRadius: BorderRadius.circular(16),
-        ),
+    return MouseRegion(
+      opaque: false,
+      onEnter: (_) => _reveal(),
+      onHover: (_) => _reveal(),
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => _reveal(),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Row(
-            children: <Widget>[
-              IconButton(
-                tooltip: playback.playing ? 'Pause' : 'Resume',
-                onPressed: playback.toggle,
-                icon: Icon(
-                  playback.playing
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
-                  color: Colors.white,
+          padding: widget.insets,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: IgnorePointer(
+              ignoring: !_visible,
+              child: AnimatedOpacity(
+                opacity: _visible ? 1 : 0,
+                duration: const Duration(milliseconds: 220),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.68),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 6,
+                      ),
+                      child: LayoutBuilder(
+                        builder:
+                            (BuildContext context, BoxConstraints constraints) {
+                              final compact = constraints.maxWidth < 300;
+                              return Row(
+                                mainAxisSize: MainAxisSize.max,
+                                children: <Widget>[
+                                  _controlButton(
+                                    tooltip: playback.playing
+                                        ? 'Pause'
+                                        : 'Resume',
+                                    onPressed: playback.toggle,
+                                    icon: playback.playing
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded,
+                                  ),
+                                  _controlButton(
+                                    tooltip: playback.volume > 0
+                                        ? 'Mute'
+                                        : 'Unmute',
+                                    onPressed: _toggleMute,
+                                    icon: playback.volume > 0
+                                        ? Icons.volume_up_rounded
+                                        : Icons.volume_off_rounded,
+                                  ),
+                                  if (!compact) ...<Widget>[
+                                    Expanded(
+                                      child: Slider(
+                                        value: playback.volume,
+                                        min: 0,
+                                        max: 2,
+                                        onChanged: (double value) {
+                                          unawaited(playback.setVolume(value));
+                                          _reveal();
+                                        },
+                                      ),
+                                    ),
+                                    Text(
+                                      '${playback.volume.toStringAsFixed(1)}×',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                  ] else
+                                    const Spacer(),
+                                  _controlButton(
+                                    tooltip: widget.fullscreen
+                                        ? 'Exit full-window playback (Esc)'
+                                        : 'Full-window playback (double-click)',
+                                    onPressed: widget.onToggleFullscreen,
+                                    icon: widget.fullscreen
+                                        ? Icons.fullscreen_exit_rounded
+                                        : Icons.fullscreen_rounded,
+                                  ),
+                                ],
+                              );
+                            },
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              const Icon(
-                Icons.volume_up_rounded,
-                color: Colors.white70,
-                size: 19,
-              ),
-              Expanded(
-                child: Slider(
-                  value: playback.volume,
-                  min: 0,
-                  max: 2,
-                  onChanged: playback.setVolume,
-                ),
-              ),
-              Text(
-                '${playback.volume.toStringAsFixed(1)}×',
-                style: const TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(width: 5),
-              IconButton(
-                tooltip: widget.fullscreen
-                    ? 'Exit full-window playback (Esc)'
-                    : 'Full-window playback (double-click)',
-                onPressed: widget.onToggleFullscreen,
-                icon: Icon(
-                  widget.fullscreen
-                      ? Icons.fullscreen_exit_rounded
-                      : Icons.fullscreen_rounded,
-                  color: Colors.white,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  Widget _controlButton({
+    required String tooltip,
+    required VoidCallback onPressed,
+    required IconData icon,
+  }) => IconButton(
+    tooltip: tooltip,
+    constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+    padding: const EdgeInsets.all(6),
+    onPressed: () {
+      onPressed();
+      _reveal();
+    },
+    icon: Icon(icon, color: Colors.white, size: 22),
+  );
+
   @override
   void dispose() {
+    _hideTimer?.cancel();
     widget.controller.playback.removeListener(_handlePlayback);
     super.dispose();
   }
@@ -714,16 +800,14 @@ final class _FullscreenPlaybackSurfaceState
                     child: _ClosedCaptionOverlay(controller: widget.controller),
                   ),
                 ),
-                Positioned(
-                  left: 22,
-                  right: 22,
-                  bottom: 22,
+                Positioned.fill(
                   child: SafeArea(
                     top: false,
                     child: _OverlayControls(
                       controller: widget.controller,
                       onToggleFullscreen: widget.onExit,
                       fullscreen: true,
+                      insets: const EdgeInsets.fromLTRB(22, 0, 22, 22),
                     ),
                   ),
                 ),

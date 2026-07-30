@@ -200,8 +200,7 @@ final class _AiCompanionPanelState extends State<AiCompanionPanel> {
                             label: const Text('Analyze current batch'),
                           ),
                         const SizedBox(width: 8),
-                        if (ai.speechContext &&
-                            (!shortPanel || runtime.loaded))
+                        if (ai.speechContext && (!shortPanel || runtime.loaded))
                           OutlinedButton.icon(
                             onPressed: _working || !runtime.loaded
                                 ? null
@@ -376,21 +375,6 @@ final class _AiCompanionPanelState extends State<AiCompanionPanel> {
       if (result is AppSuccess<String>) {
         widget.controller.agents.addSpeechContext(widget.controller.speechText);
         _question.clear();
-        unawaited(
-          showDialog<void>(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text('Technical companion'),
-              content: SelectableText(result.value),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
-                ),
-              ],
-            ),
-          ),
-        );
       } else {
         _showFailure(result);
       }

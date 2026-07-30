@@ -314,8 +314,8 @@ final class AgentOrchestrator {
   Future<AppResult<String>> answerTechnicalQuestion(
     String question,
     List<ChatMessage> recentChat,
-  ) {
-    return _runtime.generate(
+  ) async {
+    final result = await _runtime.generate(
       role: AgentRole.technical,
       systemInstruction: AgentPrompts.invariant,
       prompt: AgentPrompts.technicalQuestion(
@@ -326,6 +326,10 @@ final class AgentOrchestrator {
       maxOutputTokens: 900,
       temperature: 0.25,
     );
+    if (result case AppSuccess<String>(:final value)) {
+      _emit(AgentRole.technical, 'Technical companion reply', value);
+    }
+    return result;
   }
 
   void _requeue(List<ChatMessage> batch) {
