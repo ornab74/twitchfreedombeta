@@ -1,13 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
-/// Mobile-facing gateway for the DigitalOcean streaming node.
+import 'secure_chunk_protocol.dart';
+
+/// Mobile-facing gateway for the Stream Scanner / DigitalOcean node.
 ///
-/// Twitch credentials stay out of this class. The app authenticates to the
-/// backend with a short-lived bearer token minted by the backend's auth layer;
-/// the node owns server-side Twitch/EventSub credentials and other secrets.
+/// Provider credentials stay server-side. The handset uses a device-scoped
+/// access token to mint a short-lived stream token, plus a per-session media
+/// key used only for application-layer encrypted media chunks.
 final class StreamingBackendClient {
   StreamingBackendClient({
     required Uri baseUri,
@@ -35,6 +39,7 @@ final class StreamingBackendClient {
   final Uri _baseUri;
   final http.Client _http;
   final Future<String?> Function()? _accessTokenProvider;
+  final Uuid _uuid = const Uuid();
 
   static const Duration _requestTimeout = Duration(seconds: 12);
 
@@ -47,8 +52,8 @@ final class StreamingBackendClient {
       reachable: response.statusCode >= 200 && response.statusCode < 300,
       region: body['region']?.toString() ?? '',
       version: body['version']?.toString() ?? '',
-      websocketReady: body['websocket_ready'] == true,
-      twitchReady: body['twitch_ready'] == true,
+      encryptedMediaProtocol:
+          (body['encrypted_media_protocol'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -61,27 +66,29 @@ final class StreamingBackendClient {
     final response = await _send(
       'POST',
       '/v1/streaming/sessions',
+      idempotencyKey: _uuid.v4(),
       body: <String, Object?>{
         'channel': channel.trim().toLowerCase(),
         'quality': quality,
         'audio_only': audioOnly,
         'low_latency': lowLatency,
         'client': 'flutter-mobile',
+        'protocol_version': 2,
       },
     );
     _requireSuccess(response, operation: 'create streaming session');
-    final body = _decodeObject(response.body);
-    return StreamingSessionTicket.fromJson(body);
+    return StreamingSessionTicket.fromJson(_decodeObject(response.body));
   }
 
   Future<void> heartbeat({
-    required String sessionId,
+    required StreamingSessionTicket ticket,
     required int bufferedMilliseconds,
     required bool background,
   }) async {
     final response = await _send(
       'POST',
-      '/v1/streaming/sessions/$sessionId/heartbeat',
+      '/v1/streaming/sessions/${ticket.sessionId}/heartbeat',
+      bearerOverride: ticket.websocketToken,
       body: <String, Object?>{
         'buffered_ms': bufferedMilliseconds,
         'background': background,
@@ -90,10 +97,11 @@ final class StreamingBackendClient {
     _requireSuccess(response, operation: 'heartbeat streaming session');
   }
 
-  Future<void> endSession(String sessionId) async {
+  Future<void> endSession(StreamingSessionTicket ticket) async {
     final response = await _send(
       'DELETE',
-      '/v1/streaming/sessions/$sessionId',
+      '/v1/streaming/sessions/${ticket.sessionId}',
+      bearerOverride: ticket.websocketToken,
     );
     if (response.statusCode == 404) return;
     _requireSuccess(response, operation: 'end streaming session');
@@ -103,16 +111,19 @@ final class StreamingBackendClient {
     String method,
     String path, {
     bool authenticated = true,
+    String? bearerOverride,
+    String? idempotencyKey,
     Map<String, Object?>? body,
   }) async {
     final uri = _baseUri.resolve(path);
     final headers = <String, String>{
       'accept': 'application/json',
       'content-type': 'application/json',
-      'x-client-capability': 'streaming-v1',
+      'x-client-capability': 'streaming-v2-aead',
     };
+    if (idempotencyKey != null) headers['x-idempotency-key'] = idempotencyKey;
     if (authenticated) {
-      final token = await _accessTokenProvider?.call();
+      final token = bearerOverride ?? await _accessTokenProvider?.call();
       if (token != null && token.isNotEmpty) {
         headers['authorization'] = 'Bearer $token';
       }
@@ -153,15 +164,13 @@ final class BackendHealth {
     required this.reachable,
     required this.region,
     required this.version,
-    required this.websocketReady,
-    required this.twitchReady,
+    required this.encryptedMediaProtocol,
   });
 
   final bool reachable;
   final String region;
   final String version;
-  final bool websocketReady;
-  final bool twitchReady;
+  final int encryptedMediaProtocol;
 }
 
 final class StreamingSessionTicket {
@@ -169,35 +178,65 @@ final class StreamingSessionTicket {
     required this.sessionId,
     required this.playbackUri,
     required this.websocketUri,
+    required this.websocketToken,
     required this.expiresAt,
     required this.chunkTargetMilliseconds,
     required this.maxBufferMilliseconds,
+    required this.mediaKey,
+    required this.noncePrefix,
+    required this.protocolVersion,
   });
 
   factory StreamingSessionTicket.fromJson(Map<String, Object?> json) {
     final playback = Uri.tryParse(json['playback_url']?.toString() ?? '');
     final websocket = Uri.tryParse(json['websocket_url']?.toString() ?? '');
     final expires = DateTime.tryParse(json['expires_at']?.toString() ?? '');
-    if (playback == null || websocket == null || expires == null) {
-      throw const FormatException('Backend returned an invalid session ticket.');
+    final crypto = json['crypto'] is Map<Object?, Object?>
+        ? Map<String, Object?>.from(json['crypto']! as Map<Object?, Object?>)
+        : const <String, Object?>{};
+    final websocketToken = json['websocket_token']?.toString() ?? '';
+    final keyText = crypto['media_key_b64']?.toString() ?? '';
+    final nonceText = crypto['nonce_prefix_b64']?.toString() ?? '';
+    final protocol = (crypto['protocol_version'] as num?)?.toInt() ?? 0;
+    if (playback == null ||
+        websocket == null ||
+        expires == null ||
+        websocketToken.isEmpty ||
+        keyText.isEmpty ||
+        nonceText.isEmpty ||
+        protocol != SecureStreamingChunkFrame.protocolVersion) {
+      throw const FormatException('Backend returned an invalid secure session ticket.');
+    }
+    final mediaKey = SecureStreamingChunkFrame.decodeBase64Url(keyText);
+    final noncePrefix = SecureStreamingChunkFrame.decodeBase64Url(nonceText);
+    if (mediaKey.length != 32 || noncePrefix.length != 8) {
+      throw const FormatException('Backend returned invalid media key material.');
     }
     return StreamingSessionTicket(
       sessionId: json['session_id']?.toString() ?? '',
       playbackUri: playback,
       websocketUri: websocket,
+      websocketToken: websocketToken,
       expiresAt: expires,
       chunkTargetMilliseconds:
-          (json['chunk_target_ms'] as num?)?.toInt() ?? 1500,
-      maxBufferMilliseconds: (json['max_buffer_ms'] as num?)?.toInt() ?? 8000,
+          (json['chunk_target_ms'] as num?)?.toInt() ?? 1000,
+      maxBufferMilliseconds: (json['max_buffer_ms'] as num?)?.toInt() ?? 10000,
+      mediaKey: mediaKey,
+      noncePrefix: noncePrefix,
+      protocolVersion: protocol,
     );
   }
 
   final String sessionId;
   final Uri playbackUri;
   final Uri websocketUri;
+  final String websocketToken;
   final DateTime expiresAt;
   final int chunkTargetMilliseconds;
   final int maxBufferMilliseconds;
+  final Uint8List mediaKey;
+  final Uint8List noncePrefix;
+  final int protocolVersion;
 }
 
 final class StreamingBackendException implements Exception {
