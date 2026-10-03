@@ -1,0 +1,14 @@
+{
+  "name": "twitch-freedom-stream-node",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "check": "node --check src/server.mjs && node --check src/stream-engine.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}
