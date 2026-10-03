@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/models.dart';
 import '../state/app_controller.dart';
 import 'home_screen.dart';
+import 'mobile_home_screen.dart';
 import 'theme.dart';
 import 'unlock_screen.dart';
 
@@ -94,9 +96,18 @@ final class _AppSurfaceState extends State<_AppSurface> {
   Widget build(BuildContext context) => Theme(
     data: FreedomTheme.fromProfile(_view.theme),
     child: _view.unlocked
-        ? HomeScreen(controller: widget.controller)
+        ? _buildUnlockedSurface()
         : UnlockScreen(controller: widget.controller),
   );
+
+  Widget _buildUnlockedSurface() {
+    final mobile = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+    return mobile
+        ? MobileHomeScreen(controller: widget.controller)
+        : HomeScreen(controller: widget.controller);
+  }
 
   @override
   void dispose() {
