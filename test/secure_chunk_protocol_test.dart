@@ -22,7 +22,7 @@ void main() {
     expect(encoded.length, lessThan(SecureStreamingChunkFrame.maximumPacketBytes));
   });
 
-  test('secure chunk rejects nonce-prefix reuse preconditions', () async {
+  test('secure chunk rejects invalid nonce prefix', () async {
     final frame = SecureStreamingChunkFrame(
       sequence: 1,
       durationMilliseconds: 1000,
@@ -31,8 +31,8 @@ void main() {
       payload: Uint8List.fromList(<int>[1, 2, 3]),
     );
 
-    expect(
-      () => frame.encode(
+    await expectLater(
+      frame.encode(
         mediaKey: Uint8List(32),
         noncePrefix: Uint8List(7),
       ),
