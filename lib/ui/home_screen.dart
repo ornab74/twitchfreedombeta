@@ -127,7 +127,7 @@ final class _HomeScreenState extends State<HomeScreen> {
             onExplore: () => showExploreSheet(context, controller),
             onAdd: () => showAddStreamDialog(context, controller),
             onSettings: () => showSettingsSheet(context, controller),
-            onHelp: () => showRestorationStudio(context),
+            onHelp: () => showHelpSheet(context, controller),
           ),
         ),
         Expanded(
@@ -186,6 +186,11 @@ final class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
+                  Align(alignment: Alignment.centerRight, child: TextButton.icon(
+                    onPressed: () => showRestorationStudio(context),
+                    icon: const Icon(Icons.auto_fix_high_rounded),
+                    label: const Text('Restoration Studio'),
+                  )),
                   _Footer(controller: controller),
                 ],
               ),
