@@ -104,6 +104,7 @@ final class MediaCatalog extends ChangeNotifier {
     return null;
   }
 
+  /// Batch vault writes to avoid a UI rebuild and SQLite transaction per file.
   Future<int> importDirectory(String root, LibraryKind kind,
       {int limit = 10000}) async {
     if (kind == LibraryKind.stream) {
@@ -116,21 +117,37 @@ final class MediaCatalog extends ChangeNotifier {
       _ => {'.mkv','.mp4','.mov','.avi','.webm','.m4v'},
     };
     var count = 0;
+    final pending = <String, Map<String, Object?>>{};
+    Future<void> flush() async {
+      if (pending.isEmpty) return;
+      await vault.putJsonBatch('media_catalog', pending);
+      for (final data in pending.values) {
+        final item = LibraryEntry.fromJson(data);
+        _entries[item.id] = item;
+      }
+      pending.clear();
+      notifyListeners();
+    }
     await for (final file in dir.list(recursive:true,followLinks:false)) {
       if (file is! File || !extensions.contains(p.extension(file.path).toLowerCase())) continue;
       final stat = await file.stat();
       if (stat.type != FileSystemEntityType.file) continue;
       final id = '${kind.name}:${p.normalize(file.absolute.path)}';
-      if (!_entries.containsKey(id)) {
-        await upsert(LibraryEntry(id:id,kind:kind,
-          title:p.basenameWithoutExtension(file.path).replaceAll('_',' '),
-          source:file.absolute.path,
-          artwork: await discoverArtwork(LibraryEntry(id:id,kind:kind,
-            title:p.basenameWithoutExtension(file.path),source:file.absolute.path)) ?? ''));
-        count++;
-      }
+      if (_entries.containsKey(id)) continue;
+      final entry = LibraryEntry(
+        id:id, kind:kind,
+        title:p.basenameWithoutExtension(file.path).replaceAll('_',' '),
+        source:file.absolute.path,
+        artwork:await discoverArtwork(LibraryEntry(
+          id:id,kind:kind,title:p.basenameWithoutExtension(file.path),
+          source:file.absolute.path)) ?? '',
+      );
+      pending[id] = entry.toJson();
+      count++;
+      if (pending.length >= 100) await flush();
       if (count >= limit) break;
     }
+    await flush();
     return count;
   }
 }
