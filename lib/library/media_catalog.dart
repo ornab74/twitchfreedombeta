@@ -82,6 +82,28 @@ final class MediaCatalog extends ChangeNotifier {
 
   /// Explicit user-requested directory scan; never follows symlink directories.
   /// Limits item count and skips filesystem metadata that isn't a media file.
+  /// Finds artwork next to the media, avoiding network requests and trackers.
+  /// Returns null when no predictable, existing sidecar artwork is present.
+  Future<String?> discoverArtwork(LibraryEntry entry) async {
+    if (entry.kind == LibraryKind.stream) return null;
+    final media = File(entry.source);
+    final directory = media.parent.path;
+    final stem = p.basenameWithoutExtension(entry.source);
+    for (final filename in <String>[
+      '$stem.jpg', '$stem.png', '$stem.webp',
+      'poster.jpg', 'poster.png', 'folder.jpg', 'cover.jpg',
+    ]) {
+      final candidate = File(p.join(directory, filename));
+      if (await candidate.exists()) {
+        final stat = await candidate.stat();
+        if (stat.type == FileSystemEntityType.file && stat.size <= 15 * 1024 * 1024) {
+          return candidate.path;
+        }
+      }
+    }
+    return null;
+  }
+
   Future<int> importDirectory(String root, LibraryKind kind,
       {int limit = 10000}) async {
     if (kind == LibraryKind.stream) {
@@ -102,7 +124,9 @@ final class MediaCatalog extends ChangeNotifier {
       if (!_entries.containsKey(id)) {
         await upsert(LibraryEntry(id:id,kind:kind,
           title:p.basenameWithoutExtension(file.path).replaceAll('_',' '),
-          source:file.absolute.path));
+          source:file.absolute.path,
+          artwork: await discoverArtwork(LibraryEntry(id:id,kind:kind,
+            title:p.basenameWithoutExtension(file.path),source:file.absolute.path)) ?? ''));
         count++;
       }
       if (count >= limit) break;
