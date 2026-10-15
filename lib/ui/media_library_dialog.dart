@@ -75,9 +75,9 @@ class _LibraryViewState extends State<_LibraryView> {
        'Never invent a plot, artist, cast, release date or historical fact. '
        'When details are unknown, clearly say so. Maximum 70 words.',
      prompt:'Write a neutral media-library description using only the following '
-       'user-provided metadata. Title: ${e.title.substring(0,e.title.length.clamp(0,180))}. '
+       'user-provided metadata. Title: ${e.title.length > 180 ? e.title.substring(0,180) : e.title}. '
        'Kind: ${e.kind.name}. Artist: ${e.artist}. Year: ${e.year ?? "unknown"}. '
-       'Existing notes: ${e.description.substring(0,e.description.length.clamp(0,500))}.',
+       'Existing notes: ${e.description.length > 500 ? e.description.substring(0,500) : e.description}.',
      maxOutputTokens:140,
    );
    if(result is AppSuccess<String>) {
