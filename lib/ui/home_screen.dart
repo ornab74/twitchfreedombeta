@@ -6,6 +6,8 @@ import 'add_stream_dialog.dart';
 import 'explore_sheet.dart';
 import 'help_sheet.dart';
 import 'settings_sheet.dart';
+import 'restoration_studio.dart';
+import 'media_library_dialog.dart';
 import 'theme.dart';
 import 'widgets/ai_companion_panel.dart';
 import 'widgets/chat_panel.dart';
@@ -185,6 +187,17 @@ final class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
+                  Align(alignment: Alignment.centerRight, child: Wrap(spacing: 8, children: [
+                    TextButton.icon(
+                      onPressed: () => showMediaLibrary(context, controller),
+                      icon: const Icon(Icons.video_library_rounded),
+                      label: const Text('Media Library'),
+                    ),
+                    TextButton.icon(
+                    onPressed: () => showRestorationStudio(context),
+                    icon: const Icon(Icons.auto_fix_high_rounded),
+                    label: const Text('Restoration Studio'),
+                  ),])),
                   _Footer(controller: controller),
                 ],
               ),
@@ -225,15 +238,21 @@ final class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const Spacer(),
                 IconButton.filledTonal(
+                  onPressed: () => showMediaLibrary(context, controller),
+                  icon: const Icon(Icons.video_library_rounded),
+                  tooltip: 'Media Library',
+                ),
+                const SizedBox(width: 7),
+                IconButton.filledTonal(
                   onPressed: () => showAddStreamDialog(context, controller),
                   icon: const Icon(Icons.add_rounded),
                   tooltip: 'Add stream',
                 ),
                 const SizedBox(width: 7),
                 IconButton.filledTonal(
-                  onPressed: () => showHelpSheet(context, controller),
-                  icon: const Icon(Icons.help_outline_rounded),
-                  tooltip: 'Help',
+                  onPressed: () => showRestorationStudio(context),
+                  icon: const Icon(Icons.auto_fix_high_rounded),
+                  tooltip: 'Restoration Studio',
                 ),
                 const SizedBox(width: 7),
                 IconButton.filledTonal(
