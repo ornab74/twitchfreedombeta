@@ -6,6 +6,7 @@ import 'add_stream_dialog.dart';
 import 'explore_sheet.dart';
 import 'help_sheet.dart';
 import 'settings_sheet.dart';
+import 'restoration_studio.dart';
 import 'theme.dart';
 import 'widgets/ai_companion_panel.dart';
 import 'widgets/chat_panel.dart';
@@ -126,7 +127,7 @@ final class _HomeScreenState extends State<HomeScreen> {
             onExplore: () => showExploreSheet(context, controller),
             onAdd: () => showAddStreamDialog(context, controller),
             onSettings: () => showSettingsSheet(context, controller),
-            onHelp: () => showHelpSheet(context, controller),
+            onHelp: () => showRestorationStudio(context),
           ),
         ),
         Expanded(
@@ -231,9 +232,9 @@ final class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(width: 7),
                 IconButton.filledTonal(
-                  onPressed: () => showHelpSheet(context, controller),
-                  icon: const Icon(Icons.help_outline_rounded),
-                  tooltip: 'Help',
+                  onPressed: () => showRestorationStudio(context),
+                  icon: const Icon(Icons.auto_fix_high_rounded),
+                  tooltip: 'Restoration Studio',
                 ),
                 const SizedBox(width: 7),
                 IconButton.filledTonal(
